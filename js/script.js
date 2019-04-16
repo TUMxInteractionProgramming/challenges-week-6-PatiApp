@@ -1,6 +1,20 @@
 /* start the external action and say hello */
 console.log("App is alive");
 
+$(document).ready(function () {
+    listChannels(compareNew);
+    loadEmojis();
+    console.log("App is initialized");
+    setInterval(update, 10000);
+});
+
+function update() {
+    console.log("Updating message elements…");
+    $.each(currentChannel.messages, function (index, message) {
+        message.update();
+    });
+};
+
 /** #10 global #array of channels #arr*/
 var channels = [
     yummy,
@@ -27,7 +41,7 @@ var currentLocation = {
  * Switch channels name in the right app bar
  * @param channelObject
  */
-function switchChannel(channelObject) {
+function switchChannel(channelObject, channelElement) {
     // Log the channel switch
     console.log("Tuning in to channel", channelObject);
 
@@ -48,14 +62,16 @@ function switchChannel(channelObject) {
     $('#channel-star i').removeClass('fas far');
     $('#channel-star i').addClass(channelObject.starred ? 'fas' : 'far');
 
-
     /* highlight the selected #channel.
        This is inefficient (jQuery has to search all channel list items), but we'll change it later on */
     $('#channels li').removeClass('selected');
     $('#channels li:contains(' + channelObject.name + ')').addClass('selected');
+    $(currentChannel.name).addClass('selected');
 
     /* store selected channel in global variable */
     currentChannel = channelObject;
+    showMessages(channelObject.messages);
+    // ('#messages').append(showMessages());
 }
 
 /* liking a channel on #click */
@@ -69,8 +85,8 @@ function star() {
     currentChannel.starred = !currentChannel.starred;
 
     // toggle star also in list
-    $('#channels li:contains(' + currentChannel.name + ') .fa').removeClass('fas far');
-    $('#channels li:contains(' + currentChannel.name + ') .fa').addClass(currentChannel.starred ? 'fas' : 'far');
+    $('#channels li:contains(' + currentChannel.name + ') .fa-star').removeClass('fas far');
+    $('#channels li:contains(' + currentChannel.name + ') .fa-star').addClass(currentChannel.starred ? 'fas' : 'far');
 }
 
 /**
@@ -122,6 +138,11 @@ function Message(text) {
     // set dates
     this.createdOn = new Date() //now
     this.expiresOn = new Date(Date.now() + 15 * 60 * 1000); // mins * secs * msecs
+    this.update = function () {
+        var expiresIn = Math.round((this.expiresOn - Date.now()) / 1000 / 60);
+        this.element.find("em").text(expiresIn + " min. left")
+        if (expiresIn <= 5) {this.element.find("em").css( "color", "#3F51B5" );};
+    };
     // set text
     this.text = text;
     // own message
@@ -147,7 +168,7 @@ function sendMessage() {
     currentChannel.messages.push(message);
 
     // #10 #increase the messageCount of the current channel
-    currentChannel.messageCount+=1;
+    currentChannel.messageCount += 1;
 
     // Adding the message to the messages-div
     $('#messages').append(createMessageElement(message));
@@ -169,18 +190,39 @@ function createMessageElement(messageObject) {
     var expiresIn = Math.round((messageObject.expiresOn - Date.now()) / 1000 / 60);
 
     // Creating a message-element
-    return '<div class="message'+
+    var element = $('<div class="message' +
         //this dynamically adds #own to the #message, based on the
         //ternary operator. We need () in order not to disrupt the return.
         (messageObject.own ? ' own' : '') +
         '">' +
-        '<h3><a href="http://w3w.co/' + messageObject.createdBy + '" target="_blank">'+
+        '<h3><a href="http://w3w.co/' + messageObject.createdBy + '" target="_blank">' +
         '<strong>' + messageObject.createdBy + '</strong></a>' +
         messageObject.createdOn.toLocaleString() +
         '<em>' + expiresIn + ' min. left</em></h3>' +
         '<p>' + messageObject.text + '</p>' +
-        '<button class="accent">+5 min.</button>' +
-        '</div>';
+        '</div>');
+
+    var button = $('<button class="accent">+5 min.</button>');
+        button.click(function (event) {
+            messageObject.expiresOn = new Date(messageObject.expiresOn.getTime() + 5 * 60 * 1000);
+            messageObject.update();
+    });
+    element.append(button);
+
+    messageObject.element = element;
+
+    return element;
+}
+
+function showMessages(messages) {
+
+    $('#messages').empty();
+
+    $.each(messages, function (index, message) {
+        $('#messages').append(createMessageElement(message));
+    });
+    $('#messages').scrollTop($('#messages').prop('scrollHeight'));
+
 }
 
 /* #10 Three #compare functions to #sort channels */
@@ -223,8 +265,13 @@ function listChannels(criterion) {
 
     /* #10 append channels from #array with a #for loop */
     for (i = 0; i < channels.length; i++) {
-        $('#channels ul').append(createChannelElement(channels[i]));
+        var channelElement = createChannelElement(channels[i]);
+        $('#channels ul').append(channelElement);
+        if (channels[i] == currentChannel) {
+            channelElement.addClass('selected');
+        }
     };
+
 }
 
 /**
@@ -324,6 +371,10 @@ function createChannelElement(channelObject) {
 
     // The chevron
     $('<i>').addClass('fas').addClass('fa-chevron-right').appendTo(meta);
+
+    channel.click(function (event) {
+        switchChannel(channelObject, this.text)
+    });
 
     // return the complete channel
     return channel;
